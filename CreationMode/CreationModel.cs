@@ -1,5 +1,6 @@
 ﻿using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
+using Autodesk.Revit.DB.Structure;
 using Autodesk.Revit.UI;
 using System;
 using System.Collections.Generic;
@@ -19,7 +20,12 @@ namespace CreationMode
             Level level1 = GetLevel1(levels);               //Первый этаж
             Level level2 = GetLevel2(levels);               //Второй этаж
 
-            CreateWalls(doc, level1, level2);               //Создание стен
+            List<Wall> walls = CreateWalls(doc, level1, level2);    //создание стен
+
+            AddDoor(doc, level1, walls[0]);                         //вставка двери
+            AddWindows(doc, level1, walls[1]);                      //вставка окон
+            AddWindows(doc, level1, walls[2]);
+            AddWindows(doc, level1, walls[3]);
 
             return Result.Succeeded;
         }
@@ -48,7 +54,9 @@ namespace CreationMode
                 .FirstOrDefault();
             return leve2;
         }
-        public void CreateWalls(Document doc, Level level1, Level level2) //Метод создания стен
+
+
+        public List<Wall> CreateWalls(Document doc, Level level1, Level level2) //Метод создания стен
         {
             double width = UnitUtils.ConvertToInternalUnits(10000, UnitTypeId.Millimeters);
             double depth = UnitUtils.ConvertToInternalUnits(5000, UnitTypeId.Millimeters);
@@ -56,6 +64,7 @@ namespace CreationMode
             double dy = depth / 2;
 
             List<XYZ> points = new List<XYZ>();
+
             points.Add(new XYZ(-dx, -dy, 0));
             points.Add(new XYZ(dx, -dy, 0));
             points.Add(new XYZ(dx, dy, 0));
@@ -74,7 +83,64 @@ namespace CreationMode
                 walls.Add(wall);
                 wall.get_Parameter(BuiltInParameter.WALL_HEIGHT_TYPE).Set(level2.Id);
             }
+
             transaction.Commit();
+            return walls;
+        }
+
+        private void AddDoor(Document doc, Level level1, Wall wall)             //вставка двери
+        {
+            FamilySymbol doorType = new FilteredElementCollector(doc)
+                 .OfClass(typeof(FamilySymbol))
+                 .OfCategory(BuiltInCategory.OST_Doors)
+                 .OfType<FamilySymbol>()
+                 .Where(x => x.Name.Equals("0915 x 2134 мм"))
+                 .Where(x => x.FamilyName.Equals("Одиночные-Щитовые"))
+                 .FirstOrDefault();
+
+            LocationCurve hostCurve = wall.Location as LocationCurve;
+            XYZ point1 = hostCurve.Curve.GetEndPoint(0);
+            XYZ point2 = hostCurve.Curve.GetEndPoint(1);
+            XYZ point = (point1 + point2)/2;
+
+            Transaction transaction = new Transaction(doc, "Двери");
+            transaction.Start();
+
+            if (!doorType.IsActive)
+                doorType.Activate();
+           
+          
+            doc.Create.NewFamilyInstance(point, doorType, wall, level1, StructuralType.NonStructural);  
+            transaction.Commit();
+
+        }
+        private void AddWindows(Document doc, Level level1, Wall wall)             //вставка окна
+        {
+            FamilySymbol windowType = new FilteredElementCollector(doc)
+                 .OfClass(typeof(FamilySymbol))
+                 .OfCategory(BuiltInCategory.OST_Windows)
+                 .OfType<FamilySymbol>()
+                 .Where(x => x.Name.Equals("0915 x 1830 мм"))
+                 .Where(x => x.FamilyName.Equals("Фиксированные"))
+                 .FirstOrDefault();
+
+            double height = UnitUtils.ConvertToInternalUnits(800, UnitTypeId.Millimeters); //высота нижнего бруса
+
+            LocationCurve hostCurve = wall.Location as LocationCurve;
+            XYZ point1 = hostCurve.Curve.GetEndPoint(0);
+            XYZ point2 = hostCurve.Curve.GetEndPoint(1);
+            XYZ point = (point1 + point2)/2;
+
+            if(!windowType.IsActive)
+                windowType.Activate();
+            Transaction transaction = new Transaction(doc, "Окна");
+            transaction.Start();
+
+            FamilyInstance windows = doc.Create.NewFamilyInstance(point, windowType, wall, level1, StructuralType.NonStructural);
+            windows.get_Parameter(BuiltInParameter.INSTANCE_SILL_HEIGHT_PARAM).Set(height);
+
+            transaction.Commit();
+
         }
     }
 }
