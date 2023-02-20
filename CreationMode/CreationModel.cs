@@ -26,9 +26,11 @@ namespace CreationMode
             AddWindows(doc, level1, walls[1]);                      //вставка окон
             AddWindows(doc, level1, walls[2]);
             AddWindows(doc, level1, walls[3]);
+            AddRoof(doc, level2);
 
             return Result.Succeeded;
         }
+
         public List<Level> GetLevels(Document doc)                     //Фильтр по уровням
         {
 
@@ -101,16 +103,16 @@ namespace CreationMode
             LocationCurve hostCurve = wall.Location as LocationCurve;
             XYZ point1 = hostCurve.Curve.GetEndPoint(0);
             XYZ point2 = hostCurve.Curve.GetEndPoint(1);
-            XYZ point = (point1 + point2)/2;
+            XYZ point = (point1 + point2) / 2;
 
             Transaction transaction = new Transaction(doc, "Двери");
             transaction.Start();
 
             if (!doorType.IsActive)
                 doorType.Activate();
-           
-          
-            doc.Create.NewFamilyInstance(point, doorType, wall, level1, StructuralType.NonStructural);  
+
+
+            doc.Create.NewFamilyInstance(point, doorType, wall, level1, StructuralType.NonStructural);
             transaction.Commit();
 
         }
@@ -129,17 +131,41 @@ namespace CreationMode
             LocationCurve hostCurve = wall.Location as LocationCurve;
             XYZ point1 = hostCurve.Curve.GetEndPoint(0);
             XYZ point2 = hostCurve.Curve.GetEndPoint(1);
-            XYZ point = (point1 + point2)/2;
+            XYZ point = (point1 + point2) / 2;
 
-            if(!windowType.IsActive)
-                windowType.Activate();
+          
             Transaction transaction = new Transaction(doc, "Окна");
             transaction.Start();
-
+            if (!windowType.IsActive)
+                windowType.Activate();
             FamilyInstance windows = doc.Create.NewFamilyInstance(point, windowType, wall, level1, StructuralType.NonStructural);
             windows.get_Parameter(BuiltInParameter.INSTANCE_SILL_HEIGHT_PARAM).Set(height);
 
             transaction.Commit();
+
+        }
+        private void AddRoof(Document doc, Level level)                             //Крыша
+        {
+
+            ElementId id = doc.GetDefaultElementTypeId(ElementTypeGroup.RoofType);
+            RoofType type = doc.GetElement(id) as RoofType;
+
+            double length = UnitUtils.ConvertToInternalUnits(5500, UnitTypeId.Millimeters);  //длина
+            double width = UnitUtils.ConvertToInternalUnits(5500, UnitTypeId.Millimeters);  //ширина
+            double height = UnitUtils.ConvertToInternalUnits(4000, UnitTypeId.Millimeters); //высота
+
+            CurveArray curveArray = new CurveArray();
+            curveArray.Append(Line.CreateBound(new XYZ(-length, -width/ 2, height), new XYZ(0, 0, height * 2)));
+            curveArray.Append(Line.CreateBound(new XYZ(0, 0, height * 2), new XYZ(0, width / 2, height)));
+
+
+            using (Transaction tr = new Transaction(doc))
+            {
+                tr.Start("Create ExtrusionRoof");
+                    ReferencePlane plane = doc.Create.NewReferencePlane(new XYZ(0, 0, 0), new XYZ(0, 0, height), new XYZ(0, width, 0), doc.ActiveView);
+                    doc.Create.NewExtrusionRoof(curveArray, plane, level, type, -length, width);
+                tr.Commit();
+            }
 
         }
     }
